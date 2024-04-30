@@ -4,7 +4,11 @@ project(CHIP8 C)
 find_package(raylib 3.0 REQUIRED) # Requires at least version 3.0
 set(CMAKE_C_STANDARD 11)
 
-add_executable(CHIP8 main.c)
+add_executable(CHIP8
+        main.c
+        CHIP8/CHIP8.c
+        CHIP8/CHIP8.h
+)
 
 target_link_libraries(${PROJECT_NAME} raylib)
 
