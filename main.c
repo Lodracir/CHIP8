@@ -3,11 +3,14 @@
 /////////////////////////////////////////////////
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "raylib.h"
 #include "CHIP8/CHIP8.h"
 
-#define RAYGUI_IMPLEMENTATION
+#ifdef RAYGUI_IMPLEMENTATION
 #include "raygui.h"
+#endif
 
 /////////////////////////////////////////////////
 /// Defines
@@ -24,11 +27,14 @@
 /////////////////////////////////////////////////
 
 static chip8_keymap_t keymap;
+static uint8_t *buff;
+static uint32_t size;
 
 /////////////////////////////////////////////////
 /// Local functions
 /////////////////////////////////////////////////
 
+static bool b_load_file(const char *filename);
 static void keyboard_map(void);
 static void keyboard_logic(void);
 
@@ -36,8 +42,20 @@ static void keyboard_logic(void);
 /// Main function
 /////////////////////////////////////////////////
 
-int main(void)
+int main(int argc, char **argv)
 {
+    if( argc < 2 )
+    {
+        puts("You must provide a file to load.");
+        return -1;
+    }
+
+    if( b_load_file(argv[1]) == false )
+    {
+        puts("Failed to load file");
+        return -1;
+    }
+
     ///Local variables
     chip8_t CHIP8;
 
@@ -45,7 +63,8 @@ int main(void)
     keyboard_map();
 
     ///Init CHIP8
-    CHIP8_Init(&CHIP8, &keymap, NULL, 0);
+    CHIP8_Init(&CHIP8, &keymap, buff, size);
+    free(buff);
 
     InitWindow(MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT, MAIN_WINDOW_NAME);
     SetTargetFPS(MAIN_WINDOW_FPS);
@@ -65,10 +84,60 @@ int main(void)
             }
         }
         EndDrawing();
+
+        if(CHIP8_GetDelayTimer(&CHIP8) > 0)
+        {
+            CHIP8_DecreaseDelayTimer(&CHIP8);
+        }
+
+        if(CHIP8_GetSoundTimer(&CHIP8) > 0)
+        {
+            puts("INFO: BEEP!");
+            CHIP8_ResetSoundTimer(&CHIP8);
+        }
+
+        CHIP8_Run(&CHIP8);
     }
 
     CloseWindow();
     return 0;
+}
+
+static bool b_load_file(const char *filename) {
+    printf("File name: %s\n", filename);
+
+    FILE *f = fopen(filename, "rb");
+    if (!f) {
+        puts("Failed to open file.");
+        return false;
+    }
+
+    /// Get file size
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    /// Allocate memory
+    buff = (uint8_t *) malloc(size);
+    if (buff == NULL)
+    {
+        puts("Failed to allocate memory.");
+        return false;
+    }
+
+    memset(buff, 0, size);
+    size_t res = fread(buff, size, 1, f);
+    if(res != 1)
+    {
+        /// Clean memory and free it
+        memset(buff, 0, size);
+        free(buff);
+
+        puts("Failed to read from file.");
+        return false;
+    }
+
+    return true;
 }
 
 static void keyboard_map(void)

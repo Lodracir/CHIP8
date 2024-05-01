@@ -117,4 +117,10 @@ bool CHIP8_IsPixelSet(chip8_t *chip, uint16_t x, uint16_t y);
 
 chip8_error_t CHIP8_SetKey(chip8_t *chip, uint32_t key, bool state);
 
+uint8_t CHIP8_GetDelayTimer(chip8_t *chip);
+uint8_t CHIP8_GetSoundTimer(chip8_t *chip);
+
+void CHIP8_DecreaseDelayTimer(chip8_t *chip);
+void CHIP8_ResetSoundTimer(chip8_t *chip);
+
 #endif //CHIP8_CHIP8_H

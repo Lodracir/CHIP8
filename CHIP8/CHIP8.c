@@ -41,12 +41,16 @@ static const uint8_t chip8_default_character_set[] = {
 /////////////////////////////////////////////////
 
 static void move_character_set_to_virtual_ram(chip8_t *chip);
+static void move_data_to_virtual_ram(chip8_t *chip, uint8_t *buff, uint32_t size);
 static bool chip_draw_sprite(chip8_t *chip, uint16_t x, uint16_t y, uint8_t *sprite, uint32_t num);
 static void chip_screen_clean(chip8_t *chip);
 static chip8_error_t chip_set_pixel(chip8_t *chip, uint16_t x, uint16_t y);
+static chip8_error_t chip_memory_write(chip8_t *chip, uint16_t index, uint8_t data);
+static chip8_error_t chip_memory_read(chip8_t *chip, uint16_t index, uint8_t *data);
 static chip8_error_t chip_stack_push(chip8_t *chip, uint16_t data);
 static chip8_error_t chip_stack_pop(chip8_t *chip, uint16_t *pdata);
-static chip8_error_t chip_execute_opcode(chip8_t *chip, uint8_t opcode);
+static chip8_error_t chip_execute_opcode(chip8_t *chip, uint16_t opcode);
+static uint16_t chip_get_opcode(chip8_t *chip, uint16_t index);
 
 /////////////////////////////////////////////////
 /// Public functions
@@ -66,8 +70,17 @@ chip8_error_t CHIP8_Init(chip8_t *chip, chip8_keymap_t *keymap, uint8_t *program
     move_character_set_to_virtual_ram(chip);
 
     /// Load program to virtual memory and set PC to 0x200
+    move_data_to_virtual_ram(chip, program_buff, size);
     chip->registers.PC = CHIP8_PROGRAM_START_ADDR;
 
+    return CHIP8_ERROR_NO;
+}
+
+chip8_error_t CHIP8_Run(chip8_t *chip)
+{
+    uint16_t opcode = chip_get_opcode(chip, chip->registers.PC);
+    chip->registers.PC += 2;
+    chip_execute_opcode(chip, opcode);
     return CHIP8_ERROR_NO;
 }
 
@@ -86,6 +99,26 @@ bool CHIP8_IsPixelSet(chip8_t *chip, uint16_t x, uint16_t y)
     return chip->screen.buffer[y][x];
 }
 
+uint8_t CHIP8_GetDelayTimer(chip8_t *chip)
+{
+    return chip->registers.delayTimer;
+}
+
+uint8_t CHIP8_GetSoundTimer(chip8_t *chip)
+{
+    return chip->registers.soundTimer;
+}
+
+void CHIP8_DecreaseDelayTimer(chip8_t *chip)
+{
+    chip->registers.delayTimer--;
+}
+
+void CHIP8_ResetSoundTimer(chip8_t *chip)
+{
+    chip->registers.soundTimer = 0;
+}
+
 /////////////////////////////////////////////////
 /// Prototype static functions
 /////////////////////////////////////////////////
@@ -95,6 +128,14 @@ static void move_character_set_to_virtual_ram(chip8_t *chip)
     for(uint32_t itr = 0; itr < sizeof(chip8_default_character_set); itr++)
     {
         chip->memory[itr] = chip8_default_character_set[itr];
+    }
+}
+
+static void move_data_to_virtual_ram(chip8_t *chip, uint8_t *buff, uint32_t size)
+{
+    for(uint32_t itr = 0; itr < size; itr++)
+    {
+        chip->memory[itr + CHIP8_PROGRAM_START_ADDR] = buff[itr];
     }
 }
 
@@ -140,6 +181,27 @@ static chip8_error_t chip_set_pixel(chip8_t *chip, uint16_t x, uint16_t y)
     chip->screen.buffer[y][x] = true;
     return CHIP8_ERROR_NO;
 }
+static chip8_error_t chip_memory_write(chip8_t *chip, uint16_t index, uint8_t data)
+{
+    if(index > CHIP8_MEMORY_SIZE)
+    {
+        return CHIP8_ERROR_INVALID_INDEX;
+    }
+
+    chip->memory[index] = data;
+    return CHIP8_ERROR_NO;
+}
+
+static chip8_error_t chip_memory_read(chip8_t *chip, uint16_t index, uint8_t *data)
+{
+    if(index > CHIP8_MEMORY_SIZE)
+    {
+        return CHIP8_ERROR_INVALID_INDEX;
+    }
+
+    (*data) = chip->memory[index];
+    return CHIP8_ERROR_NO;
+}
 
 static chip8_error_t chip_stack_push(chip8_t *chip, uint16_t data)
 {
@@ -167,11 +229,11 @@ static chip8_error_t chip_stack_pop(chip8_t *chip, uint16_t *pdata)
     return CHIP8_ERROR_NO;
 }
 
-static chip8_error_t chip_execute_opcode(chip8_t *chip, uint8_t opcode)
+static chip8_error_t chip_execute_opcode(chip8_t *chip, uint16_t opcode)
 {
     ///Local variables
-    uint8_t code = (opcode & 0x0F00) >> 8;
-    uint8_t x, y, temp_code;
+    uint8_t code = (opcode & 0xF000) >> 12;
+    uint8_t x, y, temp_code, hundreds, tens, units;
     uint16_t n = 0, kk = 0;
     uint8_t *sprite = NULL;
     chip8_error_t err = CHIP8_ERROR_NO;
@@ -367,8 +429,78 @@ static chip8_error_t chip_execute_opcode(chip8_t *chip, uint8_t opcode)
             temp_code = opcode & 0x00FF;
             switch(temp_code)
             {
-                case 0x9E: // Skip next instruction if key with the value of Vx is pressed.
+                case 0x9E: /// Skip next instruction if key with the value of Vx is pressed.
+                    ///TODO: Implement keyboard logic
+                    break;
 
+                case 0xA1: /// Skip next instruction if key with the value of Vx is not pressed.
+                    ///TODO: Implement keyboard logic
+                    break;
+
+                default:
+                    err = CHIP8_ERROR_INVALID_OPCODE;
+                    break;
+            }
+        }
+
+        case 0xF:
+        {
+            temp_code = opcode & 0x00FF;
+            switch(temp_code)
+            {
+                case 0x07:  /// Set Vx = delay timer value.
+                    x = (opcode & 0x0F00) >> 8;
+                    chip->registers.V[x] = chip->registers.delayTimer;
+                    break;
+
+                case 0x0A:  /// Wait for a key press, store the value of the key in Vx.
+                    ///TODO: Implement keyboard logic
+                    break;
+
+                case 0x15:  /// Set delay timer = Vx.
+                    x = (opcode & 0x0F00) >> 8;
+                    chip->registers.delayTimer = chip->registers.V[x];
+                    break;
+
+                case 0x18:  /// Set sound timer = Vx.
+                    x = (opcode & 0x0F00) >> 8;
+                    chip->registers.soundTimer = chip->registers.V[x];
+                    break;
+
+                case 0x1E:  /// Set I = I + Vx.
+                    x = (opcode & 0x0F00) >> 8;
+                    chip->registers.I = chip->registers.I + chip->registers.V[x];
+                    break;
+
+                case  0x29: /// Set I = location of sprite for digit Vx
+                    x = (opcode & 0x0F00) >> 8;
+                    chip->registers.I = chip->registers.V[x] * 5;
+                    break;
+
+                case 0x33:  /// Store BCD representation of Vx in memory locations I, I+1, and I+2.
+                    x = (opcode & 0x0F00) >> 8;
+                    hundreds = chip->registers.V[x] / 100;
+                    tens = chip->registers.V[x] / 10 % 10;
+                    units = chip->registers.V[x] % 10;
+                    chip_memory_write(chip, chip->registers.I, hundreds);
+                    chip_memory_write(chip, chip->registers.I+1, hundreds);
+                    chip_memory_write(chip, chip->registers.I+2, hundreds);
+                    break;
+
+                case 0x55:  /// Store registers V0 through Vx in memory starting at location I.
+                    x = (opcode & 0x0F00) >> 8;
+                    for(uint32_t itr = 0; itr < x; itr++)
+                    {
+                        chip_memory_write(chip, chip->registers.I+itr, chip->registers.V[itr]);
+                    }
+                    break;
+
+                case 0x65:  /// Read registers V0 through Vx from memory starting at location I.
+                    x = (opcode & 0x0F00) >> 8;
+                    for(uint32_t itr = 0; itr < x; itr++)
+                    {
+                        chip_memory_read(chip, chip->registers.I+itr, &chip->registers.V[itr]);
+                    }
                     break;
 
                 default:
@@ -383,4 +515,15 @@ static chip8_error_t chip_execute_opcode(chip8_t *chip, uint8_t opcode)
     }
 
     return err;
+}
+
+static uint16_t chip_get_opcode(chip8_t *chip, uint16_t index)
+{
+    uint8_t byte[2] = {0};
+
+    /// Get U16 value
+    chip_memory_read(chip, index, &byte[0]);
+    chip_memory_read(chip, index + 1, &byte[1]);
+
+    return (uint16_t)( byte[0] << 8 | byte[1] );
 }
