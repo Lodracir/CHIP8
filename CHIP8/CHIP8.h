@@ -19,6 +19,8 @@
 #define CHIP8_WIDTH_SCREEN  64
 #define CHIP8_HEIGHT_SCREEN 32
 
+#define CHIP8_PROGRAM_START_ADDR 0x200
+
 /////////////////////////////////////////////////
 /// Typedef enumerations
 /////////////////////////////////////////////////
@@ -31,7 +33,9 @@ typedef enum CHIP8_ERROR_TYPE
     CHIP8_ERROR_STACK_FULL,
     CHIP8_ERROR_STACK_EMPTY,
     CHIP8_ERROR_INVALID_KEYBOARD_INDEX,
+    CHIP8_ERROR_SCREEN_INVALID_COORDINATES,
     CHIP8_ERROR_DATA_OVERSIZE,
+    CHIP8_ERROR_INVALID_OPCODE,
 
 } chip8_error_t;
 
@@ -85,6 +89,11 @@ typedef struct CHIP8_SCREEN_STRUCT
     bool buffer[CHIP8_HEIGHT_SCREEN][CHIP8_WIDTH_SCREEN];
 } chip8_screen_t;
 
+typedef struct CHIP8_KEYMAP_STRUCT
+{
+    uint32_t map[CHIP8_KEY_ID_TOTAL];
+} chip8_keymap_t;
+
 typedef struct CHIP8_STRUCT
 {
     chip8_mem_t         memory;
@@ -92,12 +101,20 @@ typedef struct CHIP8_STRUCT
     chip8_stack_t       stack;
     chip8_screen_t      screen;
     chip8_keyboard_t    key;
+    chip8_keymap_t      *keymap;
+
 } chip8_t;
 
 /////////////////////////////////////////////////
 /// Public Prototype Functions
 /////////////////////////////////////////////////
 
-chip8_error_t CHIP8_Init(chip8_t *chip, uint8_t *program_buff, uint32_t size);
+chip8_error_t CHIP8_Init(chip8_t *chip, chip8_keymap_t *keymap, uint8_t *program_buff, uint32_t size);
+chip8_error_t CHIP8_Run(chip8_t *chip);
+
+bool CHIP8_DrawSprite(chip8_t *chip, uint16_t x, uint16_t y, uint8_t *sprite, uint32_t num);
+bool CHIP8_IsPixelSet(chip8_t *chip, uint16_t x, uint16_t y);
+
+chip8_error_t CHIP8_SetKey(chip8_t *chip, uint32_t key, bool state);
 
 #endif //CHIP8_CHIP8_H

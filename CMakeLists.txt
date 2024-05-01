@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.28)
 project(CHIP8 C)
 
-find_package(raylib 3.0 REQUIRED) # Requires at least version 3.0
+find_package(raylib 4.0 REQUIRED) # Requires at least version 3.0
 set(CMAKE_C_STANDARD 11)
+
+include_directories(
+        Inc
+)
 
 add_executable(CHIP8
         main.c
