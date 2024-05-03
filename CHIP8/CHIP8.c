@@ -3,44 +3,24 @@
 /////////////////////////////////////////////////
 
 #include "CHIP8.h"
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
 
 /////////////////////////////////////////////////
-/// Static typedef structures
+/// Defines
 /////////////////////////////////////////////////
-
-
 
 /////////////////////////////////////////////////
 /// Static variables
 /////////////////////////////////////////////////
 
-static const uint8_t chip8_default_character_set[] = {
-        0xF0,0x90, 0x90, 0x90, 0xF0,    // 0
-        0x20,0x60, 0x20, 0x20, 0x70,    // 1
-        0xF0,0x10, 0xF0, 0x80, 0xF0,    // 2
-        0xF0,0x10, 0xF0, 0x10, 0xF0,    // 3
-        0x90,0x90, 0xF0, 0x10, 0x10,    // 4
-        0xF0,0x80, 0xF0, 0x10, 0xF0,    // 5
-        0xF0,0x80, 0xF0, 0x90, 0xF0,    // 6
-        0xF0,0x10, 0x20, 0x40, 0x40,    // 7
-        0xF0,0x90, 0xF0, 0x90, 0xF0,    // 8
-        0xF0,0x90, 0xF0, 0x10, 0xF0,    // 9
-        0xF0,0x90, 0xF0, 0x90, 0x90,    // A
-        0xE0,0x90, 0xE0, 0x90, 0xE0,    // B
-        0xF0,0x80, 0x80, 0x80, 0xF0,    // C
-        0xE0,0x90, 0x90, 0x90, 0xE0,    // D
-        0xF0,0x80, 0xF0, 0x80, 0xF0,    // E
-        0xF0,0x80, 0xF0, 0x80, 0x80     // F
-};
-
 /////////////////////////////////////////////////
 /// Prototype static functions
 /////////////////////////////////////////////////
 
-static void move_character_set_to_virtual_ram(chip8_t *chip);
+static bool move_character_set_to_virtual_ram(chip8_t *chip);
 static void move_data_to_virtual_ram(chip8_t *chip, uint8_t *buff, uint32_t size);
 static bool chip_draw_sprite(chip8_t *chip, uint16_t x, uint16_t y, uint8_t *sprite, uint32_t num);
 static void chip_screen_clean(chip8_t *chip);
@@ -67,7 +47,10 @@ chip8_error_t CHIP8_Init(chip8_t *chip, chip8_keymap_t *keymap, uint8_t *program
     memset((void *)chip, 0, sizeof(chip8_t));
 
     /// Copy default character set to CHIP8 virtual memory
-    move_character_set_to_virtual_ram(chip);
+    if( move_character_set_to_virtual_ram(chip) == false )
+    {
+        return CHIP8_ERROR_INIT;
+    }
 
     /// Load program to virtual memory and set PC to 0x200
     move_data_to_virtual_ram(chip, program_buff, size);
@@ -80,6 +63,9 @@ chip8_error_t CHIP8_Run(chip8_t *chip)
 {
     uint16_t opcode = chip_get_opcode(chip, chip->registers.PC);
     chip->registers.PC += 2;
+
+    printf("INFO: OPCODE %04X | PC %04X\n", opcode, chip->registers.PC);
+
     chip_execute_opcode(chip, opcode);
     return CHIP8_ERROR_NO;
 }
@@ -123,12 +109,54 @@ void CHIP8_ResetSoundTimer(chip8_t *chip)
 /// Prototype static functions
 /////////////////////////////////////////////////
 
-static void move_character_set_to_virtual_ram(chip8_t *chip)
+static bool move_character_set_to_virtual_ram(chip8_t *chip)
 {
-    for(uint32_t itr = 0; itr < sizeof(chip8_default_character_set); itr++)
+    const char char_set_path[] = "./bin/char_set.bin";
+    uint8_t *buff = NULL;
+    uint16_t size = 0;
+
+    FILE *f = fopen(char_set_path, "rb");
+    if (!f)
     {
-        chip->memory[itr] = chip8_default_character_set[itr];
+        puts("Failed to open file.");
+        return false;
     }
+
+    /// Get file size
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    /// Allocate memory
+    buff = (uint8_t *)malloc(size);
+    if(buff == NULL)
+    {
+        puts("Failed to allocate memory");
+        return false;
+    }
+
+    memset(buff, 0, size);
+    size_t res = fread(buff, size, 1, f);
+    if(res != 1)
+    {
+        /// Clean memory and free it
+        memset(buff, 0, size);
+        free(buff);
+
+        puts("Failed to read from file.");
+        return false;
+    }
+
+    for(uint32_t itr = 0; itr < size; itr++)
+    {
+        chip->memory[itr] = buff[itr];
+    }
+
+    /// Clean memory and free it
+    memset(buff, 0, size);
+    free(buff);
+
+    return true;
 }
 
 static void move_data_to_virtual_ram(chip8_t *chip, uint8_t *buff, uint32_t size)

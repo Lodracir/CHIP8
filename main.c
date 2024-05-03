@@ -20,7 +20,7 @@
 #define MAIN_WINDOW_SCALE_FACTOR    10
 #define MAIN_WINDOW_WIDTH   (CHIP8_WIDTH_SCREEN * MAIN_WINDOW_SCALE_FACTOR)
 #define MAIN_WINDOW_HEIGHT  (CHIP8_HEIGHT_SCREEN * MAIN_WINDOW_SCALE_FACTOR)
-#define MAIN_WINDOW_FPS     30
+#define MAIN_WINDOW_FPS     60
 
 /////////////////////////////////////////////////
 /// Local variables

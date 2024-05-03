@@ -16,6 +16,13 @@ add_executable(CHIP8
 
 target_link_libraries(${PROJECT_NAME} raylib)
 
+# Copy required files to build directory
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/CHIP8/char_set.bin
+        ${CMAKE_BINARY_DIR}/bin/char_set.bin
+)
+
 # Checks if OSX and links appropriate frameworks (only required on MacOS)
 if (APPLE)
     target_link_libraries(${PROJECT_NAME} "-framework IOKit")
